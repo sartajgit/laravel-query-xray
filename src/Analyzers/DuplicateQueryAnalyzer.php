@@ -20,7 +20,6 @@ class DuplicateQueryAnalyzer
         $groups = [];
 
         foreach ($queries as $query) {
-            // Framework-only queries (no app file) aren't actionable for the developer.
             if ($query['file'] === null) {
                 continue;
             }
