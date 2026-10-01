@@ -12,6 +12,7 @@ use Sartajgit\QueryXray\Analyzers\UnoptimizedQueryAnalyzer;
 use Sartajgit\QueryXray\Models\QueryFinding;
 use Sartajgit\QueryXray\Support\BacktraceResolver;
 use Sartajgit\QueryXray\Support\QueryFingerprint;
+use Sartajgit\QueryXray\Support\SensitiveDataMasker;
 
 class QueryCollector
 {
@@ -29,6 +30,9 @@ class QueryCollector
     {
         $origin = $this->resolver->resolve();
 
+        // NOTE: raw, unmasked bindings are kept here deliberately — the
+        // N+1 and duplicate analyzers need real values to tell queries
+        // apart correctly. Masking is applied later, only at persist().
         $this->queries[] = [
             'sql' => $query->sql,
             'bindings' => $query->bindings,
@@ -100,10 +104,6 @@ class QueryCollector
      * Write every finding from this request into the database.
      * Called from ServiceProvider::terminating(), after the response
      * has already been sent to the browser — adds no latency to the request.
-     *
-     * Wrapped in try/catch because terminating() callbacks run with no
-     * exception handling in Laravel core — an uncaught error here would
-     * fail silently from the browser's point of view.
      */
     public function persist(): void
     {
@@ -113,10 +113,9 @@ class QueryCollector
             return;
         }
 
-        // IMPORTANT: must be a string, not a Carbon object — the query
-        // builder's insert() does not cast values, unlike Eloquent save().
-        $now = now()->toDateTimeString();
+        $masker = new SensitiveDataMasker(config('query-xray.sensitive_patterns', []));
 
+        $now = now()->toDateTimeString();
         $method = null;
         $url = null;
 
@@ -130,12 +129,15 @@ class QueryCollector
         $rows = [];
 
         foreach ($findings as $finding) {
+            $bindings = $finding['bindings'] ?? [];
+            $maskedBindings = $masker->mask($finding['sql'], $bindings);
+
             $rows[] = [
                 'type' => $finding['type'],
                 'issue' => $finding['issue'] ?? null,
                 'fingerprint' => $finding['fingerprint'],
                 'sql' => $finding['sql'],
-                'bindings' => isset($finding['bindings']) ? json_encode($finding['bindings']) : null,
+                'bindings' => json_encode($maskedBindings),
                 'count' => $finding['count'] ?? 1,
                 'time_ms' => $finding['time'] ?? $finding['total_time'] ?? null,
                 'connection' => $finding['connection'] ?? null,
