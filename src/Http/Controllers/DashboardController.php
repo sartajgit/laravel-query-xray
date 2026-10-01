@@ -28,7 +28,7 @@ class DashboardController extends Controller
 
     public function clearType(Request $request, string $type)
     {
-        $allowed = ['n_plus_one', 'slow_query', 'duplicate_query', 'unoptimized_query'];
+        $allowed = ['n_plus_one', 'slow_query', 'duplicate_query', 'unoptimized_query', 'missing_index'];
 
         if (! in_array($type, $allowed, true)) {
             return response()->json(['status' => 'error', 'message' => 'Unknown type'], 422);
@@ -58,15 +58,13 @@ class DashboardController extends Controller
                 'n_plus_one' => $this->aggregated('n_plus_one', $topN, false, $from, $to, $search),
                 'duplicate_query' => $this->aggregated('duplicate_query', $topN, false, $from, $to, $search),
                 'unoptimized_query' => $this->aggregated('unoptimized_query', $topN, true, $from, $to, $search),
+                'missing_index' => $this->aggregated('missing_index', $topN, false, $from, $to, $search),
             ],
             'generated_at' => now()->toDateTimeString(),
             'generated_at_iso' => now()->toIso8601String(),
         ];
     }
 
-    /**
-     * @return array{0: \Illuminate\Support\Carbon|null, 1: \Illuminate\Support\Carbon|null}
-     */
     protected function resolveDateRange(Request $request): array
     {
         $range = $request->query('range', '24h');
@@ -129,6 +127,7 @@ class DashboardController extends Controller
             'slow_query' => (int) ($rows['slow_query'] ?? 0),
             'duplicate_query' => (int) ($rows['duplicate_query'] ?? 0),
             'unoptimized_query' => (int) ($rows['unoptimized_query'] ?? 0),
+            'missing_index' => (int) ($rows['missing_index'] ?? 0),
             'total' => (int) $rows->sum(),
         ];
     }
@@ -162,10 +161,6 @@ class DashboardController extends Controller
             ->limit($limit)
             ->get();
 
-        // `last_seen` comes back as a plain "Y-m-d H:i:s" string with no
-        // timezone marker. Convert it to an explicit UTC ISO string here so
-        // JavaScript never has to guess (and silently guess wrong) what
-        // timezone the raw string was in.
         return $rows->map(function ($row) {
             if ($row->last_seen) {
                 $row->last_seen_iso = Carbon::parse($row->last_seen, config('app.timezone'))

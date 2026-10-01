@@ -69,6 +69,7 @@
         .stat-card.slow_query .num { color: var(--slow-color); }
         .stat-card.duplicate_query .num { color: var(--dup-color); }
         .stat-card.unoptimized_query .num { color: var(--unopt-color); }
+        .stat-card.missing_index .num { color: #a78bfa; }
 
         .section { margin-bottom: 32px; }
         .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
@@ -153,6 +154,7 @@
         <div class="stat-card slow_query"><div class="num" id="stat-slow_query">{{ $stats['slow_query'] }}</div><div class="label">Slow Queries</div></div>
         <div class="stat-card duplicate_query"><div class="num" id="stat-duplicate_query">{{ $stats['duplicate_query'] }}</div><div class="label">Duplicates</div></div>
         <div class="stat-card unoptimized_query"><div class="num" id="stat-unoptimized_query">{{ $stats['unoptimized_query'] }}</div><div class="label">Unoptimized</div></div>
+        <div class="stat-card missing_index"><div class="num" id="stat-missing_index">{{ $stats['missing_index'] }}</div><div class="label">Missing Index</div></div>
     </div>
 
     @php
@@ -161,6 +163,7 @@
             'slow_query' => 'Top Slow Queries',
             'duplicate_query' => 'Top Duplicate Query Issues',
             'unoptimized_query' => 'Top Unoptimized Query Issues',
+            'missing_index' => 'Top Missing Index Issues',
         ];
         $topN = config('query-xray.dashboard.top_n', 5);
     @endphp
@@ -409,13 +412,14 @@
                 const data = await res.json();
 
                 document.getElementById('generated-at').textContent = data.generated_at;
-                for (const key of ['total', 'n_plus_one', 'slow_query', 'duplicate_query', 'unoptimized_query']) {
+                for (const key of ['total', 'n_plus_one', 'slow_query', 'duplicate_query', 'unoptimized_query', 'missing_index']) {
                     document.getElementById('stat-' + key).textContent = data.stats[key];
                 }
                 renderRows('rows-n_plus_one', data.top.n_plus_one);
                 renderRows('rows-slow_query', data.top.slow_query);
                 renderRows('rows-duplicate_query', data.top.duplicate_query);
                 renderRows('rows-unoptimized_query', data.top.unoptimized_query);
+                renderRows('rows-missing_index', data.top.missing_index);
 
                 SECTION_IDS.forEach(id => updateSeeMoreVisibility(id));
             } catch (e) {

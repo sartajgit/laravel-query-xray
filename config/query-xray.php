@@ -13,6 +13,11 @@ return [
 
     'auto_migrate' => env('QUERY_XRAY_AUTO_MIGRATE', true),
 
+    'missing_index_detection' => [
+        'enabled' => env('QUERY_XRAY_MISSING_INDEX', false),
+        'min_rows_to_flag' => env('QUERY_XRAY_MISSING_INDEX_MIN_ROWS', 50),
+    ],
+
     'sensitive_patterns' => [
         'password', 'passwd', 'secret', 'token', 'api_key', 'apikey',
         'access_key', 'private_key', 'client_secret', 'auth_code',

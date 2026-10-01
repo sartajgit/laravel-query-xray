@@ -21,6 +21,7 @@ abstract class TestCase extends OrchestraTestCase
             'prefix' => '',
         ]);
 
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
         $app['config']->set('query-xray.enabled', true);
         $app['config']->set('query-xray.environments', ['testing']);
         $app['config']->set('query-xray.auto_migrate', true);

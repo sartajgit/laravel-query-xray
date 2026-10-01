@@ -6,6 +6,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 use Sartajgit\QueryXray\Analyzers\DuplicateQueryAnalyzer;
+use Sartajgit\QueryXray\Analyzers\MissingIndexAnalyzer;
 use Sartajgit\QueryXray\Analyzers\NPlusOneAnalyzer;
 use Sartajgit\QueryXray\Analyzers\SlowQueryAnalyzer;
 use Sartajgit\QueryXray\Analyzers\UnoptimizedQueryAnalyzer;
@@ -30,9 +31,6 @@ class QueryCollector
     {
         $origin = $this->resolver->resolve();
 
-        // NOTE: raw, unmasked bindings are kept here deliberately — the
-        // N+1 and duplicate analyzers need real values to tell queries
-        // apart correctly. Masking is applied later, only at persist().
         $this->queries[] = [
             'sql' => $query->sql,
             'bindings' => $query->bindings,
@@ -80,12 +78,56 @@ class QueryCollector
         $duplicate = new DuplicateQueryAnalyzer();
         $unoptimized = new UnoptimizedQueryAnalyzer();
 
-        return array_merge(
+        $findings = array_merge(
             $slow->analyze($this->queries),
             $nPlusOne->analyze($this->queries),
             $duplicate->analyze($this->queries),
             $unoptimized->analyze($this->queries)
         );
+
+        if (config('query-xray.missing_index_detection.enabled', false)) {
+            $findings = array_merge($findings, $this->missingIndexFindings($findings));
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Missing-index detection runs EXPLAIN only against queries that were
+     * ALREADY flagged by another analyzer — never against every query that
+     * ran — to keep the extra database load bounded and deliberate.
+     */
+    protected function missingIndexFindings(array $alreadyFlagged): array
+    {
+        if (empty($alreadyFlagged)) {
+            return [];
+        }
+
+        // Map flagged findings back to a full query record (sql + bindings)
+        // from the raw collected queries, matched by fingerprint.
+        $candidates = [];
+        $seenFingerprints = [];
+
+        foreach ($alreadyFlagged as $finding) {
+            $fp = $finding['fingerprint'];
+            if (isset($seenFingerprints[$fp])) {
+                continue;
+            }
+            $seenFingerprints[$fp] = true;
+
+            foreach ($this->queries as $raw) {
+                if ($raw['fingerprint'] === $fp) {
+                    $candidates[] = $raw;
+                    break;
+                }
+            }
+        }
+
+        $analyzer = new MissingIndexAnalyzer(
+            (int) config('query-xray.missing_index_detection.min_rows_to_flag', 50)
+        );
+
+        return $analyzer->analyze($candidates);
     }
 
     public function stats(): array
@@ -100,11 +142,6 @@ class QueryCollector
         return $stats;
     }
 
-    /**
-     * Write every finding from this request into the database.
-     * Called from ServiceProvider::terminating(), after the response
-     * has already been sent to the browser — adds no latency to the request.
-     */
     public function persist(): void
     {
         $findings = $this->findings();
