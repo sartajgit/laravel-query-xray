@@ -257,6 +257,11 @@
         const toInput = document.getElementById('to-input');
         const searchInput = document.getElementById('search-input');
 
+        rangeSelect.value = '24h';
+        pollSelect.value = '300000';
+        searchInput.value = '';
+        customRangeBox.classList.remove('active');
+        
         rangeSelect.addEventListener('change', () => {
             currentFilters.range = rangeSelect.value;
             customRangeBox.classList.toggle('active', rangeSelect.value === 'custom');

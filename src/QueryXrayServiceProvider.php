@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Sartajgit\QueryXray\Collectors\QueryCollector;
+use Sartajgit\QueryXray\Console\Commands\PruneCommand;
 
 class QueryXrayServiceProvider extends ServiceProvider
 {
@@ -27,6 +28,8 @@ class QueryXrayServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'query-xray');
 
+        $this->app['router']->aliasMiddleware('query-xray.auth', \Sartajgit\QueryXray\Http\Middleware\EnsureQueryXrayAccess::class);
+
         if (config('query-xray.dashboard.enabled', true) && $this->allowedEnvironment()) {
             $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         }
@@ -34,6 +37,14 @@ class QueryXrayServiceProvider extends ServiceProvider
         if (! $this->shouldRun()) {
             return;
         }
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([PruneCommand::class]);
+        }
+
+        $this->app->afterResolving(Schedule::class, function (Schedule $schedule) {
+            $schedule->command('query-xray:prune')->daily();
+        });
 
         $this->ensureTableExists();
 

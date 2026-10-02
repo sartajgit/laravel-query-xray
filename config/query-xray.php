@@ -13,6 +13,8 @@ return [
 
     'auto_migrate' => env('QUERY_XRAY_AUTO_MIGRATE', true),
 
+    'retention_days' => env('QUERY_XRAY_RETENTION_DAYS', 7),
+
     'missing_index_detection' => [
         'enabled' => env('QUERY_XRAY_MISSING_INDEX', false),
         'min_rows_to_flag' => env('QUERY_XRAY_MISSING_INDEX_MIN_ROWS', 50),

@@ -33,107 +33,96 @@ Add to your `.env`:
 
 QUERY_XRAY_ENABLED=true
 
-That's it. Visit any page in your app once, then open: http://your-app.test/query-xray
 
+Visit `/query-xray` after browsing a few pages.
 
-The dashboard will show findings from every request your app handles from that point forward.
+## All configuration (`.env`) options
 
-## Configuration
-
-The package works with zero configuration out of the box. To customize it, publish the config file:
-
+Publish the config file if you want to edit these as PHP instead of `.env`:
 ```bash
 php artisan vendor:publish --tag=query-xray-config
 ```
 
-This creates `config/query-xray.php`:
-
-```php
-return [
-    'enabled' => env('QUERY_XRAY_ENABLED', false),
-
-    'environments' => ['local', 'staging'],
-
-    'slow_threshold_ms' => env('QUERY_XRAY_SLOW_MS', 100),
-
-    'n_plus_one_threshold' => env('QUERY_XRAY_N_PLUS_ONE', 3),
-
-    'table_name' => env('QUERY_XRAY_TABLE', 'query_xray_findings'),
-
-    'auto_migrate' => env('QUERY_XRAY_AUTO_MIGRATE', true),
-
-    'dashboard' => [
-        'enabled' => env('QUERY_XRAY_DASHBOARD', true),
-        'path' => env('QUERY_XRAY_DASHBOARD_PATH', 'query-xray'),
-        'middleware' => ['web'],
-        'poll_seconds' => env('QUERY_XRAY_POLL_SECONDS', 60),
-        'top_n' => env('QUERY_XRAY_TOP_N', 5),
-    ],
-];
-```
-
-### Available `.env` options
-
-| Key | Default | Description |
+| `.env` key | Default | What it does |
 |---|---|---|
-| `QUERY_XRAY_ENABLED` | `false` | Master switch. Query capture and the dashboard are both off unless this is `true`. |
-| `QUERY_XRAY_SLOW_MS` | `100` | Queries at or above this many milliseconds are flagged as slow. |
-| `QUERY_XRAY_N_PLUS_ONE` | `3` | Minimum repeat count from the same line to flag as N+1. |
+| `QUERY_XRAY_ENABLED` | `false` | Master switch. Nothing runs unless `true`. |
+| `QUERY_XRAY_SLOW_MS` | `100` | Queries at/above this many ms are flagged `slow_query`. |
+| `QUERY_XRAY_N_PLUS_ONE` | `3` | Minimum repeat count (same line, different values) to flag as `n_plus_one`. |
 | `QUERY_XRAY_TABLE` | `query_xray_findings` | Table name used to store findings. |
 | `QUERY_XRAY_AUTO_MIGRATE` | `true` | Auto-creates the findings table on first boot. Set `false` to run `php artisan migrate` yourself. |
-| `QUERY_XRAY_DASHBOARD` | `true` | Toggles the dashboard route on/off. |
-| `QUERY_XRAY_DASHBOARD_PATH` | `query-xray` | The URL path the dashboard is served at. |
-| `QUERY_XRAY_POLL_SECONDS` | `60` | How often the dashboard polls for new data, in seconds. |
+| `QUERY_XRAY_RETENTION_DAYS` | `7` | How many days of findings `query-xray:prune` keeps. Older rows are deleted. Auto-scheduled daily — requires your app's scheduler (`php artisan schedule:run` on cron) to actually be running. |
+| `QUERY_XRAY_MISSING_INDEX` | `false` | Enables `EXPLAIN`-based missing-index detection. Off by default — it's real extra DB load, turn on deliberately. |
+| `QUERY_XRAY_MISSING_INDEX_MIN_ROWS` | `50` | Minimum rows scanned before a missing-index finding is reported (avoids flagging tiny tables). |
+| `QUERY_XRAY_DASHBOARD` | `true` | Toggles the dashboard route on/off entirely. |
+| `QUERY_XRAY_DASHBOARD_PATH` | `query-xray` | URL path the dashboard is served at. |
+| `QUERY_XRAY_MIDDLEWARE` | `web` | Comma-separated middleware list for the dashboard routes. **See "Restricting dashboard access" below — the default has no login requirement.** |
+| `QUERY_XRAY_POLL_SECONDS` | `5` | Default auto-refresh interval shown in the dashboard dropdown. |
 | `QUERY_XRAY_TOP_N` | `5` | How many of the worst issues to show per category. |
 
 ## Restricting dashboard access
 
-By default the dashboard route only uses the `web` middleware group and is only registered in `local`/`staging` environments. If your staging server is internet-facing, add authentication:
+**By default, the dashboard has NO login requirement** — anyone who can reach the URL can view query data (including real SQL and file paths) and permanently delete it via the Clear buttons. This is intentional for quick local development; restrict it before deploying anywhere reachable by anyone else.
 
+**Recommended — graceful login check (works even if your app has no `login` named route):**
+
+QUERY_XRAY_MIDDLEWARE=web,query-xray.auth
+
+This uses the package's own middleware: if the user is logged in, they proceed; if not, they're redirected to your app's `login` route if one exists, or shown a plain "please log in" page if it doesn't — never a crash.
+
+**Alternative — Laravel's built-in `auth` middleware** (only use this if you're certain a route named `login` exists in your app, since it will throw `RouteNotFoundException` otherwise):
+
+QUERY_XRAY_MIDDLEWARE=web,auth
+
+
+**For tighter control (specific admins only, not every logged-in user):**
+1. Publish the config (see above).
+2. Define a Gate in your app, e.g. in `AuthServiceProvider`:
 ```php
-'dashboard' => [
-    'middleware' => ['web', 'auth'],
-    // ...
-],
+   Gate::define('view-query-xray', fn ($user) => $user->is_admin);
 ```
+3. In `config/query-xray.php`:
+```php
+   'middleware' => ['web', 'auth', 'can:view-query-xray'],
+```
+
+## Keeping the findings table from growing forever
+
+```bash
+php artisan query-xray:prune              # uses QUERY_XRAY_RETENTION_DAYS
+php artisan query-xray:prune --days=3     # one-off override
+```
+
+This is auto-registered on your app's scheduler to run daily — but only takes effect if your app's scheduler is actually running (a cron entry calling `php artisan schedule:run` every minute, which is standard for any Laravel app using `Schedule::command(...)` features). If you've never set that up, add the standard cron entry per Laravel's own docs, or run the prune command manually/via your own cron.
 
 ## How it works
 
-Every query your app runs fires through Laravel's `DB::listen()` event. The package captures each query's SQL, bindings, execution time, and — by walking the call stack — the exact file and line in your own application code that triggered it (framework and vendor code is automatically filtered out).
-
-After each request finishes (using Laravel's `terminating()` hook, so this adds no latency to the response the user sees), findings are written to the database. The dashboard reads from that table and polls for updates every few seconds.
+Every query fires through Laravel's `DB::listen()`. The package captures SQL, bindings, timing, and — via a filtered call-stack walk — the exact file and line in your own app code that triggered it. After each request finishes (via `terminating()`, adding no latency), findings are masked for sensitive data and written to the database. The dashboard reads from that table and polls for updates.
 
 ## What gets flagged and why
 
 | Type | Trigger | Why it matters |
 |---|---|---|
-| `n_plus_one` | Same query shape, same file/line, ≥3 times with different values | Usually means a missing `->with()` eager load inside a loop |
-| `slow_query` | Execution time ≥ threshold | Missing index, large table scan, or inefficient join |
-| `duplicate_query` | Same query, same values, run more than once | Wasted round-trip — the result should be cached in a variable |
-| `unoptimized_query` (`select_star`) | `SELECT *` | Pulls unnecessary columns, increasing memory and network cost |
-| `unoptimized_query` (`leading_wildcard_like`) | `LIKE '%value'` | Cannot use a standard index, forces a full table scan |
-| `unoptimized_query` (`missing_limit`) | Full-table `SELECT` with no `WHERE`/`LIMIT` | Will load the entire table into memory as it grows |
+| `n_plus_one` | Same shape, same file/line, ≥3× with different values | Usually a missing `->with()` eager load in a loop |
+| `slow_query` | Execution time ≥ threshold | Missing index, large scan, or inefficient join |
+| `duplicate_query` | Same query, same values, run more than once | Wasted round-trip — cache the result |
+| `unoptimized_query` (`select_star`) | `SELECT *` | Unnecessary columns, more memory/network cost |
+| `unoptimized_query` (`leading_wildcard_like`) | `LIKE '%value'` | Can't use a standard index, forces a full scan |
+| `unoptimized_query` (`missing_limit`) | Full-table `SELECT` with no `WHERE`/`LIMIT` | Loads the entire table as it grows |
+| `missing_index` | `EXPLAIN` shows no index used on an already-flagged query | Suggests an `ALTER TABLE ... ADD INDEX` |
 
 ## Uninstalling
 
 ```bash
 composer remove sartajgit/laravel-query-xray
 ```
-
-Then drop the findings table if you no longer need the historical data:
-
 ```bash
 php artisan tinker --execute="Illuminate\Support\Facades\Schema::dropIfExists('query_xray_findings');"
 ```
 
 ## Contributing
 
-Issues and pull requests are welcome at [github.com/sartajgit/laravel-query-xray](https://github.com/sartajgit/laravel-query-xray).
+Issues and PRs welcome at [github.com/sartajgit/laravel-query-xray](https://github.com/sartajgit/laravel-query-xray). CI runs the full test suite against PHP 8.0–8.3 and Laravel 8–13 on every push.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Support
-
-If this package saved you some debugging time, consider [buying me a coffee](https://buymeacoffee.com/sartajgit). ☕
