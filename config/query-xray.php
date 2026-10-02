@@ -28,7 +28,7 @@ return [
     'dashboard' => [
         'enabled' => env('QUERY_XRAY_DASHBOARD', true),
         'path' => env('QUERY_XRAY_DASHBOARD_PATH', 'query-xray'),
-        'middleware' => ['web'],
+        'middleware' => explode(',', env('QUERY_XRAY_MIDDLEWARE', 'web')),
         'poll_seconds' => 60,
         'top_n' => env('QUERY_XRAY_TOP_N', 10),
     ],

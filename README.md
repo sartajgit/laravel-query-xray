@@ -1,20 +1,22 @@
 # Laravel Query X-Ray
 
-Real-time N+1, slow query, duplicate query, and unoptimized query detection for Laravel — with a live dashboard that shows exactly which file and line number each issue came from, plus a suggested fix.
+Real-time N+1, slow query, duplicate query, unoptimized query, and missing-index detection for Laravel — with a live dashboard that shows exactly which file and line number each issue came from, plus a suggested fix.
 
-Install it, enable it, browse your app normally, and watch the dashboard fill up with real problems from your real code — no manual test routes, no separate profiling tool to learn.
+Install it, enable it, browse your app normally, and watch the dashboard fill up with real problems from your real code.
 
 ## Features
 
-- **N+1 detection** — catches the same query shape firing repeatedly from the same line with different values (the classic missing-eager-load problem)
-- **Slow query detection** — flags any query over a configurable threshold (default 100ms)
-- **Duplicate query detection** — catches the exact same query with the exact same values running more than once in a single request
-- **Unoptimized query patterns** — `SELECT *`, leading-wildcard `LIKE '%value'`, missing `LIMIT` on full-table scans
-- **File + line tracking** — every finding points to the exact line in your app code that triggered it
-- **Live dashboard** — auto-refreshing every few seconds, no manual reload needed
-- **Light/dark theme** — remembers your preference
-- **Zero manual setup** — table auto-creates on first boot, no `php artisan migrate` required
-- **Safe by default** — only runs in `local`/`staging` environments unless you explicitly configure otherwise
+- **N+1 detection** — same query shape firing repeatedly from the same line with different values
+- **Slow query detection** — flags queries over a configurable threshold
+- **Duplicate query detection** — the exact same query with the exact same values running more than once in a request
+- **Unoptimized query patterns** — `SELECT *`, leading-wildcard `LIKE '%value'`, missing `LIMIT`
+- **Missing index detection** — runs `EXPLAIN` on already-flagged queries and suggests an index (MySQL/MariaDB only)
+- **Sensitive data masking** — `password`, `token`, and similar column values are masked before ever being stored
+- **File + line tracking** — every finding points to the exact line in your app code
+- **Live dashboard** — auto-refreshing, with time-range filtering, search, and per-category or global clear
+- **Zero manual setup** — table auto-creates on first boot
+- **Safe by default** — only runs in `local`/`staging` unless configured otherwise
+- **Automated test suite + CI** — 48+ tests, verified against PHP 8.0–8.3 and Laravel 8–13 on every commit
 
 ## Requirements
 
@@ -64,7 +66,7 @@ return [
         'enabled' => env('QUERY_XRAY_DASHBOARD', true),
         'path' => env('QUERY_XRAY_DASHBOARD_PATH', 'query-xray'),
         'middleware' => ['web'],
-        'poll_seconds' => env('QUERY_XRAY_POLL_SECONDS', 5),
+        'poll_seconds' => env('QUERY_XRAY_POLL_SECONDS', 60),
         'top_n' => env('QUERY_XRAY_TOP_N', 5),
     ],
 ];
@@ -81,7 +83,7 @@ return [
 | `QUERY_XRAY_AUTO_MIGRATE` | `true` | Auto-creates the findings table on first boot. Set `false` to run `php artisan migrate` yourself. |
 | `QUERY_XRAY_DASHBOARD` | `true` | Toggles the dashboard route on/off. |
 | `QUERY_XRAY_DASHBOARD_PATH` | `query-xray` | The URL path the dashboard is served at. |
-| `QUERY_XRAY_POLL_SECONDS` | `5` | How often the dashboard polls for new data, in seconds. |
+| `QUERY_XRAY_POLL_SECONDS` | `60` | How often the dashboard polls for new data, in seconds. |
 | `QUERY_XRAY_TOP_N` | `5` | How many of the worst issues to show per category. |
 
 ## Restricting dashboard access
