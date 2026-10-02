@@ -4,10 +4,10 @@ namespace Sartajgit\QueryXray\Support;
 
 class BacktraceResolver
 {
-    /** @var string[] Folders whose frames are skipped (framework + this package). */
+    /** @var string[] */
     protected array $ignoredPaths;
 
-    /** @var string[] Individual entry-point files that are never "your code". */
+    /** @var string[] */
     protected array $ignoredFiles;
 
     public function __construct(array $extraIgnoredPaths = [])
@@ -40,10 +40,62 @@ class BacktraceResolver
                 continue;
             }
 
+            $file = $frame['file'];
+            $line = (int) $frame['line'];
+
+            if ($this->isCompiledView($file)) {
+                $resolved = $this->resolveCompiledViewSource($file);
+
+                if ($resolved !== null) {
+                    return [
+                        'file' => $this->relative($resolved),
+                        'line' => 0,
+                    ];
+                }
+
+                continue;
+            }
+
             return [
-                'file' => $this->relative($frame['file']),
-                'line' => (int) $frame['line'],
+                'file' => $this->relative($file),
+                'line' => $line,
             ];
+        }
+
+        return null;
+    }
+
+    protected function isCompiledView(string $file): bool
+    {
+        $normalized = $this->normalize($file);
+        $viewsCache = $this->normalize(storage_path('framework/views'));
+
+        return strpos($normalized, $viewsCache.DIRECTORY_SEPARATOR) === 0;
+    }
+
+    protected function resolveCompiledViewSource(string $compiledFile): ?string
+    {
+        if (! is_readable($compiledFile)) {
+            return null;
+        }
+
+        $handle = fopen($compiledFile, 'r');
+
+        if ($handle === false) {
+            return null;
+        }
+
+        $firstLine = fgets($handle);
+        fclose($handle);
+
+        if ($firstLine === false) {
+            return null;
+        }
+
+        if (preg_match('/\/\*\*?compiled from (.+?)\*\//', $firstLine, $matches)) {
+            $sourcePath = trim($matches[1]);
+
+            return is_readable($sourcePath) ? $sourcePath : null;
         }
 
         return null;
