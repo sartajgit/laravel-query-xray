@@ -64,7 +64,6 @@ class UnoptimizedQueryAnalyzerTest extends TestCase
         $analyzer = new UnoptimizedQueryAnalyzer();
         $findings = $analyzer->analyze([$this->makeQuery('select * from users')]);
 
-        // This one query matches BOTH select_star and missing_limit.
         $this->assertCount(2, $findings);
         $issues = array_column($findings, 'issue');
         $this->assertContains('select_star', $issues);

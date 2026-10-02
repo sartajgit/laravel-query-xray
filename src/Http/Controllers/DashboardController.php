@@ -162,6 +162,11 @@ class DashboardController extends Controller
             ->get();
 
         return $rows->map(function ($row) {
+
+            $row->occurrences = (int) $row->occurrences;
+            $row->total_count = (int) $row->total_count;
+            $row->max_time_ms = $row->max_time_ms !== null ? (float) $row->max_time_ms : null;
+            
             if ($row->last_seen) {
                 $row->last_seen_iso = Carbon::parse($row->last_seen, config('app.timezone'))
                     ->utc()

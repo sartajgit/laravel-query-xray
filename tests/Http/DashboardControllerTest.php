@@ -80,8 +80,6 @@ class DashboardControllerTest extends TestCase
 
     public function test_repeated_same_issue_collapses_into_one_aggregated_row(): void
     {
-        // Same fingerprint + file + line, inserted 3 separate times —
-        // must appear as ONE row in "top", with occurrences = 3.
         $this->insertFinding(['fingerprint' => 'same-fp', 'file' => 'app/X.php', 'line' => 5]);
         $this->insertFinding(['fingerprint' => 'same-fp', 'file' => 'app/X.php', 'line' => 5]);
         $this->insertFinding(['fingerprint' => 'same-fp', 'file' => 'app/X.php', 'line' => 5]);
@@ -90,7 +88,9 @@ class DashboardControllerTest extends TestCase
 
         $topSlow = $response->json('top.slow_query');
         $this->assertCount(1, $topSlow, 'Three identical findings must collapse into one aggregated row.');
+
         $this->assertSame(3, $topSlow[0]['occurrences']);
+        $this->assertIsInt($topSlow[0]['occurrences']);
     }
 
     public function test_clear_all_removes_every_finding(): void

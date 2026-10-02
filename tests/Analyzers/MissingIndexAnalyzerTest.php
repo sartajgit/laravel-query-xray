@@ -59,10 +59,6 @@ class MissingIndexAnalyzerTest extends TestCase
             $this->makeQuery('select * from `xray_test_people` where `email` = ?', ['person1@example.com']),
         ]);
 
-        // We don't assert a specific count here, since SQLite's EXPLAIN
-        // output differs from MySQL's — this test's purpose is confirming
-        // the analyzer runs end-to-end against a real DB without throwing,
-        // not validating MySQL-specific index-detection accuracy.
         $this->assertIsArray($findings);
     }
 
@@ -76,9 +72,6 @@ class MissingIndexAnalyzerTest extends TestCase
             $this->makeQuery('select * from `xray_test_people` where `age` = ?', [35]),
         ]);
 
-        // All three share the same fingerprint, so at most 1 finding should
-        // come out, proving we EXPLAIN each distinct query shape once, not
-        // once per occurrence.
         $this->assertLessThanOrEqual(1, count($findings));
     }
 
