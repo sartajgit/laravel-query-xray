@@ -7,48 +7,50 @@ class SensitiveDataMasker
     /** @var string[] */
     protected array $patterns;
 
+    /** @var string[] lowercase "table.column" pairs */
+    protected array $exactColumns;
+
     protected string $maskValue;
 
-    public function __construct(array $patterns, string $maskValue = '***MASKED***')
+    public function __construct(array $patterns, array $exactColumns = [], string $maskValue = '***MASKED***')
     {
         $this->patterns = $patterns;
+        $this->exactColumns = array_map('strtolower', $exactColumns);
         $this->maskValue = $maskValue;
     }
 
     /**
-     * Return a copy of $bindings with any value whose governing column name
-     * matches a sensitive pattern replaced by the mask placeholder.
-     *
-     * Known limitation: this matches by COLUMN NAME only. A sensitive value
-     * stored under a generic column name (e.g. Laravel's `sessions`.`id`,
-     * which holds a session token) will NOT be masked, since "id" itself
-     * isn't a sensitive-looking name. Add table-specific rules if you need
-     * to cover that case.
-     *
      * @param  array<int, mixed>  $bindings
      * @return array<int, mixed>
      */
     public function mask(string $sql, array $bindings): array
     {
-        if (empty($bindings) || empty($this->patterns)) {
+        if (empty($bindings)) {
             return $bindings;
         }
 
+        $table = $this->extractPrimaryTable($sql);
         $columns = $this->extractColumnsForPlaceholders($sql);
         $masked = [];
 
         foreach ($bindings as $i => $value) {
             $column = $columns[$i] ?? null;
-            $masked[$i] = ($column !== null && $this->isSensitive($column))
-                ? $this->maskValue
-                : $value;
+
+            $isSensitive = ($column !== null && $this->isSensitiveByPattern($column))
+                || ($column !== null && $table !== null && $this->isSensitiveByExactColumn($table, $column));
+
+            $masked[$i] = $isSensitive ? $this->maskValue : $value;
         }
 
         return $masked;
     }
 
-    protected function isSensitive(string $column): bool
+    protected function isSensitiveByPattern(string $column): bool
     {
+        if (empty($this->patterns)) {
+            return false;
+        }
+
         $column = strtolower($column);
 
         foreach ($this->patterns as $pattern) {
@@ -60,13 +62,27 @@ class SensitiveDataMasker
         return false;
     }
 
+    protected function isSensitiveByExactColumn(string $table, string $column): bool
+    {
+        if (empty($this->exactColumns)) {
+            return false;
+        }
+
+        $key = strtolower($table).'.'.strtolower($column);
+
+        return in_array($key, $this->exactColumns, true);
+    }
+
+    protected function extractPrimaryTable(string $sql): ?string
+    {
+        if (preg_match('/\b(?:from|into|update)\s+`?([a-zA-Z_][a-zA-Z0-9_]*)`?/i', $sql, $matches)) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
     /**
-     * Walk the SQL and, for each "?" placeholder in order, find the column
-     * name that governs it — the identifier immediately before the nearest
-     * preceding comparison operator or an "IN (" list opener. An IN-list
-     * with multiple placeholders correctly maps every placeholder in the
-     * list back to that same single column.
-     *
      * @return array<int, string|null>
      */
     protected function extractColumnsForPlaceholders(string $sql): array

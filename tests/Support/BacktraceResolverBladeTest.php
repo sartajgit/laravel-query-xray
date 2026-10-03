@@ -20,8 +20,8 @@ class BacktraceResolverBladeTest extends TestCase
 
         file_put_contents(
             $compiledFile,
-            '<?php /*compiled from '.$bladeSource.'*/ ?>'.
-            '<?php $origin = $resolver->resolve(); ?>'
+            '<?php $origin = $resolver->resolve(); ?>'.
+            '<?php /**PATH '.$bladeSource.' ENDPATH**/ ?>'
         );
 
         $resolver = new BacktraceResolver();

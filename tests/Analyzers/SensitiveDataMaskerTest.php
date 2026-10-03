@@ -7,12 +7,12 @@ use Sartajgit\QueryXray\Tests\TestCase;
 
 class SensitiveDataMaskerTest extends TestCase
 {
-    protected function masker(): SensitiveDataMasker
+    protected function masker(array $exactColumns = []): SensitiveDataMasker
     {
         return new SensitiveDataMasker([
             'password', 'token', 'secret', 'api_key', 'apikey',
             'credit_card', 'card_number', 'cvv', 'cvc', 'ssn', 'otp',
-        ]);
+        ], $exactColumns);
     }
 
     public function test_id_column_is_not_masked(): void
@@ -85,5 +85,32 @@ class SensitiveDataMaskerTest extends TestCase
     {
         $result = $this->masker()->mask('select * from `users`', []);
         $this->assertSame([], $result);
+    }
+
+        public function test_exact_column_override_masks_a_generically_named_column(): void
+    {
+        $masker = $this->masker(['sessions.id']);
+
+        $result = $masker->mask('select * from `sessions` where `id` = ?', ['sessionTokenValue123']);
+
+        $this->assertSame(['***MASKED***'], $result);
+    }
+
+    public function test_exact_column_override_does_not_affect_other_tables_id_column(): void
+    {
+        $masker = $this->masker(['sessions.id']);
+
+        $result = $masker->mask('select * from `users` where `id` = ?', [42]);
+
+        $this->assertSame([42], $result);
+    }
+
+    public function test_no_exact_columns_configured_is_a_safe_no_op(): void
+    {
+        $masker = $this->masker([]);
+
+        $result = $masker->mask('select * from `sessions` where `id` = ?', ['sessionTokenValue123']);
+
+        $this->assertSame(['sessionTokenValue123'], $result, 'Without exact-column config, sessions.id should NOT be masked — same as before this feature existed.');
     }
 }

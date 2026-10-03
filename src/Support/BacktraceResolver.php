@@ -79,20 +79,13 @@ class BacktraceResolver
             return null;
         }
 
-        $handle = fopen($compiledFile, 'r');
+        $contents = file_get_contents($compiledFile);
 
-        if ($handle === false) {
+        if ($contents === false) {
             return null;
         }
 
-        $firstLine = fgets($handle);
-        fclose($handle);
-
-        if ($firstLine === false) {
-            return null;
-        }
-
-        if (preg_match('/\/\*\*?compiled from (.+?)\*\//', $firstLine, $matches)) {
+        if (preg_match('/\/\*\*PATH\s+(.+?)\s+ENDPATH\*\*\//', $contents, $matches)) {
             $sourcePath = trim($matches[1]);
 
             return is_readable($sourcePath) ? $sourcePath : null;

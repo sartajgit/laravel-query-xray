@@ -63,6 +63,8 @@ class UnoptimizedQueryAnalyzer
             'issue' => $issue,
             'sql' => $query['sql'],
             'bindings' => $query['bindings'],
+            'time' => $query['time'] ?? null,
+            'connection' => $query['connection'] ?? null,
             'file' => $query['file'],
             'line' => $query['line'],
             'fingerprint' => $query['fingerprint'],

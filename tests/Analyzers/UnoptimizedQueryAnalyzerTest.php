@@ -86,4 +86,24 @@ class UnoptimizedQueryAnalyzerTest extends TestCase
 
         $this->assertCount(0, $findings);
     }
+
+    public function test_findings_include_time_and_connection_for_persistence(): void
+    {
+        $analyzer = new UnoptimizedQueryAnalyzer();
+
+        $query = $this->makeQuery('select * from `users` where `id` = ?', [1]);
+        $query['time'] = 55.5;
+        $query['connection'] = 'mysql';
+
+        $findings = $analyzer->analyze([$query]);
+
+        $this->assertNotEmpty($findings);
+
+        foreach ($findings as $finding) {
+            $this->assertArrayHasKey('time', $finding, 'An unoptimized_query finding must carry the query time so it persists correctly, not as null.');
+            $this->assertArrayHasKey('connection', $finding);
+            $this->assertSame(55.5, $finding['time']);
+            $this->assertSame('mysql', $finding['connection']);
+        }
+    }
 }

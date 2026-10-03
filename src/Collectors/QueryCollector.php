@@ -92,19 +92,12 @@ class QueryCollector
         return $findings;
     }
 
-    /**
-     * Missing-index detection runs EXPLAIN only against queries that were
-     * ALREADY flagged by another analyzer — never against every query that
-     * ran — to keep the extra database load bounded and deliberate.
-     */
     protected function missingIndexFindings(array $alreadyFlagged): array
     {
         if (empty($alreadyFlagged)) {
             return [];
         }
 
-        // Map flagged findings back to a full query record (sql + bindings)
-        // from the raw collected queries, matched by fingerprint.
         $candidates = [];
         $seenFingerprints = [];
 
@@ -150,7 +143,10 @@ class QueryCollector
             return;
         }
 
-        $masker = new SensitiveDataMasker(config('query-xray.sensitive_patterns', []));
+        $masker = new SensitiveDataMasker(
+            config('query-xray.sensitive_patterns', []),
+            config('query-xray.sensitive_columns', [])
+        );
 
         $now = now()->toDateTimeString();
         $method = null;

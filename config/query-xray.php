@@ -26,6 +26,10 @@ return [
         'credit_card', 'card_number', 'cvv', 'cvc', 'ssn',
         'social_security', 'pin_code', 'otp', 'bank_account', 'iban',
     ],
+
+    'sensitive_columns' => [
+        'sessions.id',
+    ],
     
     'dashboard' => [
         'enabled' => env('QUERY_XRAY_DASHBOARD', true),
