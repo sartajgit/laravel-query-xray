@@ -61,14 +61,12 @@
         #refresh-indicator { font-size: 12px; color: var(--text-dim); display: none; white-space: nowrap; }
 
         .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }
-        .storage-warning {
-            display: none;
-            background: #3a2a1a; border: 1px solid #ffa94d; color: #ffd8a8;
-            border-radius: 8px; padding: 10px 16px; font-size: 13px;
-            margin-bottom: 16px; align-items: center; gap: 8px;
+        .chart-card {
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 20px; margin-bottom: 32px;
         }
-        html[data-theme="light"] .storage-warning { background: #fff4e6; border-color: #ffa94d; color: #d9480f; }
-        .storage-warning.visible { display: flex; }
+        .chart-card h3 { font-size: 13px; color: var(--text-dim); margin: 0 0 14px; font-weight: 500; }
+        .chart-wrap { height: 220px; position: relative; }
         .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
         .stat-card .num { font-size: 28px; font-weight: 700; }
         .stat-card .label { font-size: 12px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
@@ -111,6 +109,7 @@
         .suggestion { color: var(--text-dim); font-size: 12px; max-width: 320px; }
         .empty { color: var(--text-faint); font-style: italic; padding: 16px 10px; }
     </style>
+    {{-- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> --}}
 </head>
 <body>
 
@@ -156,10 +155,6 @@
         <input type="text" id="search-input" placeholder="query text or file path…" style="width: 240px;">
     </div>
 
-    <div class="storage-warning" id="storage-warning">
-        ⚠️ <span id="storage-warning-text"></span>
-    </div>
-
     <div class="stats">
         <div class="stat-card total"><div class="num" id="stat-total">{{ $stats['total'] }}</div><div class="label">Total Detections</div></div>
         <div class="stat-card n_plus_one"><div class="num" id="stat-n_plus_one">{{ $stats['n_plus_one'] }}</div><div class="label">N+1</div></div>
@@ -168,6 +163,13 @@
         <div class="stat-card unoptimized_query"><div class="num" id="stat-unoptimized_query">{{ $stats['unoptimized_query'] }}</div><div class="label">Unoptimized</div></div>
         <div class="stat-card missing_index"><div class="num" id="stat-missing_index">{{ $stats['missing_index'] }}</div><div class="label">Missing Index</div></div>
     </div>
+
+    {{-- <div class="chart-card">
+        <h3>Findings by Category</h3>
+        <div class="chart-wrap">
+            <canvas id="findings-chart"></canvas>
+        </div>
+    </div> --}}
 
     @php
         $sections = [
@@ -223,18 +225,44 @@
     <script>
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         
-        const warningThreshold = {{ (int) config('query-xray.warning_threshold', 10000) }};
-        const warningBanner = document.getElementById('storage-warning');
-        const warningText = document.getElementById('storage-warning-text');
+        // ---------- Live bar chart ----------
+        /*const chartCtx = document.getElementById('findings-chart').getContext('2d');
+        const chartColors = { n_plus_one: '#ff6b6b', slow_query: '#ffa94d', duplicate_query: '#ffd43b', unoptimized_query: '#4dabf7', missing_index: '#a78bfa' };
 
-        function updateStorageWarning(total) {
-            if (total >= warningThreshold) {
-                warningText.textContent = total.toLocaleString() + ' total findings stored. If this keeps growing, confirm your scheduler is running "php artisan query-xray:prune" (requires cron calling schedule:run).';
-                warningBanner.classList.add('visible');
-            } else {
-                warningBanner.classList.remove('visible');
+        const findingsChart = new Chart(chartCtx, {
+            type: 'bar',
+            data: {
+                labels: ['N+1', 'Slow', 'Duplicates', 'Unoptimized', 'Missing Index'],
+                datasets: [{
+                    data: [
+                        {{ $stats['n_plus_one'] }}, {{ $stats['slow_query'] }},
+                        {{ $stats['duplicate_query'] }}, {{ $stats['unoptimized_query'] }},
+                        {{ $stats['missing_index'] }}
+                    ],
+                    backgroundColor: Object.values(chartColors),
+                    borderRadius: 6,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    x: { grid: { display: false } }
+                },
+                animation: { duration: 400 }
             }
-        }
+        });
+
+        function updateChart(stats) {
+            findingsChart.data.datasets[0].data = [
+                stats.n_plus_one, stats.slow_query, stats.duplicate_query,
+                stats.unoptimized_query, stats.missing_index
+            ];
+            findingsChart.update();
+        }*/
+        // ---------- End Live bar chart ----------
         
         const baseDataUrl = @json(route('query-xray.data'));
         const clearAllUrl = @json(route('query-xray.clear'));
@@ -369,10 +397,6 @@
         const SECTION_IDS = ['section-n_plus_one', 'section-slow_query', 'section-duplicate_query', 'section-unoptimized_query'];
         SECTION_IDS.forEach(id => updateSeeMoreVisibility(id));
 
-        // ---------- Date helpers (ALWAYS use the *_iso field — it is
-        // explicit UTC, e.g. "2026-09-30T05:52:00+00:00" — never parse the
-        // plain "Y-m-d H:i:s" string directly in JS, since the browser will
-        // silently treat it as local time and produce a wrong "time ago") ----------
         function timeAgo(isoStr) {
             if (!isoStr) return '';
             const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
@@ -390,9 +414,6 @@
             });
         }
 
-        // Re-render the initial Blade-rendered rows' relative time using the
-        // browser's own local clock/timezone (nicer than the server-rendered
-        // version, and keeps ticking correctly on every poll after this).
         document.querySelectorAll('.last-seen[data-iso]').forEach(el => {
             const iso = el.getAttribute('data-iso');
             if (iso) el.textContent = 'last: ' + timeAgo(iso);
@@ -446,9 +467,7 @@
                 for (const key of ['total', 'n_plus_one', 'slow_query', 'duplicate_query', 'unoptimized_query', 'missing_index']) {
                     document.getElementById('stat-' + key).textContent = data.stats[key];
                 }
-
-                updateStorageWarning(data.stats.total);
-
+                updateChart(data.stats);
                 renderRows('rows-n_plus_one', data.top.n_plus_one);
                 renderRows('rows-slow_query', data.top.slow_query);
                 renderRows('rows-duplicate_query', data.top.duplicate_query);
@@ -462,8 +481,7 @@
                 refreshIndicator.style.display = 'none';
             }
         }
-        
-        updateStorageWarning({{ (int) $stats['total'] }});
+
         restartPolling();
     </script>
 

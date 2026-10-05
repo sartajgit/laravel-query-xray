@@ -15,6 +15,8 @@ return [
 
     'retention_days' => env('QUERY_XRAY_RETENTION_DAYS', 7),
 
+    'warning_threshold' => env('QUERY_XRAY_WARNING_THRESHOLD', 1000),
+
     'missing_index_detection' => [
         'enabled' => env('QUERY_XRAY_MISSING_INDEX', false),
         'min_rows_to_flag' => env('QUERY_XRAY_MISSING_INDEX_MIN_ROWS', 50),
