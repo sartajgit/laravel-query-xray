@@ -140,7 +140,7 @@ Issues and PRs welcome at [github.com/sartajgit/laravel-query-xray](https://gith
 
 ## Support
 
-If this package saved you some debugging time, consider [buying me a coffee](https://buymeacoffee.com/sartajgit). ☕
+If this package saved you some debugging time, consider [buying me a coffee](https://buymeacoffee.com/wHXVvzP). ☕
 
 ## License
 
