@@ -27,12 +27,10 @@ class MissingIndexAnalyzer
         $seen = [];
 
         foreach ($candidateQueries as $query) {
-            // Only SELECTs are meaningful to EXPLAIN this way; skip the rest.
             if (! preg_match('/^\s*select\b/i', $query['sql'])) {
                 continue;
             }
 
-            // Avoid EXPLAINing the exact same query shape twice in one batch.
             $key = $query['fingerprint'];
             if (isset($seen[$key])) {
                 continue;
@@ -73,7 +71,7 @@ class MissingIndexAnalyzer
                     'suggestion' => $this->buildSuggestion($query['sql'], $row->table ?? null, $rowsScanned),
                 ];
 
-                break; // one finding per query is enough, even if multiple tables are joined
+                break;
             }
         }
 
@@ -130,6 +128,6 @@ class MissingIndexAnalyzer
             }
         }
 
-        return array_slice($columns, 0, 3); // keep suggestions readable
+        return array_slice($columns, 0, 3);
     }
 }
