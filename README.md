@@ -31,7 +31,7 @@ Install it, enable it, browse your app normally, and watch the dashboard fill up
 ## Installation
 
 ```bash
-composer require sartajgit/laravel-query-xray:v1.0.0-beta --dev
+composer require sartajgit/laravel-query-xray:v1.0.1-beta --dev
 ```
 
 Add to your `.env`:
